@@ -27,7 +27,7 @@ const exerciseLogSchema = new mongoose.Schema({
     required: true
   },
   date: {
-    type: String,
+    type: Date,
     required: true
   },
   user_id: {
@@ -68,8 +68,8 @@ app.route('/api/users/:_id/exercises')
   const id = req.params._id;
   const d = req.body.date
   const date = new Date(d).toString() === "Invalid Date" 
-    ? new Date().toDateString()
-    : new Date(d).toDateString();
+    ? new Date()
+    : new Date(d);
   const newExerciseLog = new Log({
     description, 
     duration, 
@@ -81,27 +81,46 @@ app.route('/api/users/:_id/exercises')
     User.find({_id:id}, (err,result)=>{
       if (err) {console.log(err); return;}
       const {_id, username} = result[0]
-      res.json({_id, username, date, duration:parseInt(duration), description})
+      res.json({_id, username, date:date.toDateString(), duration:parseInt(duration), description})
     })
   })
 })
 
 app.route('/api/users/:_id/logs')
 .get((req,res)=>{
-  console.log('body',req.body)
 
-  const {from} = req.query
-  console.log('from',from)
-
+  const {from, to, limit} = req.query
   const _id = req.params._id;
+  const query = {
+    user_id:_id,
+  }
+  const dateFilter = {}
+  if (from) {
+    dateFilter.$gte = new Date(from);
+  }
+  if (to) {
+    dateFilter['$lte'] = new Date(to);
+  }
+  if (from || to) {
+    query.date = dateFilter
+  }
   User.find({_id}, (err,result)=>{  
     if(err) {console.log(err); return;}
     const {username} = result[0]
-
-    Log.find({user_id:_id})
+    Log.find(query)
     .select('-_id description duration date')
+    .limit(parseInt(limit))
     .exec((err,log)=>{
       if(err) {console.log(err); return;}
+
+      log = log.map(l=>{
+        const {description, duration, date} = l;
+        return {
+          description,
+          duration,
+          "date": new Date(date).toDateString()
+        }
+      })
 
       const count = log.length
       res.json({_id,username,count,log})
